@@ -14,6 +14,8 @@
 #include "main.h"
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
+#include "SSD1306.h"
+#include "BufWriter.h"
 
 
 #define ADC_TO_VOLTAGE (3.3f / 4095.0f)
@@ -26,15 +28,27 @@
 //#define PUMP_MOTOR1
 
 #ifdef PUMP_MOTOR1
+#ifdef MOTOR_DEFINED
+#error Redundant motor definition!
+#endif
+#define MOTOR_DEFINED
 #define NUM_POLES 3
 const vect_dq Ldq = {250e-6f, 250e-6f};
 const float R_phase = 3.8f;
 #endif
 
 #ifdef HOBBYKING_MOTOR
+#ifdef MOTOR_DEFINED
+#error Redundant motor definition!
+#endif
+#define MOTOR_DEFINED
 #define NUM_POLES 6
 const vect_dq Ldq = {19e-6f, 19e-6f};
 const float R_phase = 0.170f;
+#endif
+
+#ifndef MOTOR_DEFINED
+#error No motor defined!
 #endif
 
 
@@ -43,6 +57,7 @@ const float dt = 1/float(PWM_FREQ);
 extern TIM_HandleTypeDef htim1, htim6;
 extern ADC_HandleTypeDef hadc1, hadc2;
 extern UART_HandleTypeDef huart3;
+extern SPI_HandleTypeDef hspi1;
 
 CurrentSensorDualADC_BackEMF current(&hadc1, &hadc2,
 		CURRENT_SCALE, VBUS_SCALE, ADC_SAMPLES);
@@ -54,6 +69,9 @@ PWMGenerator_WVU pwm(&htim1);
 
 CurrentDQController idqc(dt, 10.0f, Ldq, 0.3f);
 GenericController controller(dt, pos, current, pwm, idqc, DELAY_CORR);
+
+uint8_t screenbuf[PAGES*COLUMNS];
+BufWriter bufwriter(screenbuf, PAGES, COLUMNS);
 
 TrigAngle angle;
 
@@ -175,20 +193,48 @@ void learningModeHandler() {
 
 
 void setup() {
+	HAL_GPIO_WritePin(SCREEN_RESET_GPIO_Port, SCREEN_RESET_Pin, GPIO_PIN_SET);
+	HAL_GPIO_WritePin(SCREEN_DATASEL_GPIO_Port, SCREEN_DATASEL_Pin, GPIO_PIN_RESET);
+	HAL_GPIO_WritePin(SCREEN_CS_GPIO_Port, SCREEN_CS_Pin, GPIO_PIN_RESET);
 	HAL_Delay(2000);
-	HAL_GPIO_WritePin(USB_ENABLE_GPIO_Port, USB_ENABLE_Pin, GPIO_PIN_SET);
 
 	start_delay_timer(&htim6);
 	HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED);
-	HAL_Delay(1000);
 	HAL_ADCEx_Calibration_Start(&hadc2, ADC_SINGLE_ENDED);
 	HAL_Delay(1000);
+	HAL_GPIO_WritePin(SCREEN_RESET_GPIO_Port, SCREEN_RESET_Pin, GPIO_PIN_RESET);
+	HAL_Delay(100);
+	HAL_GPIO_WritePin(SCREEN_RESET_GPIO_Port, SCREEN_RESET_Pin, GPIO_PIN_SET);
+	HAL_Delay(100);
+
+
+	HAL_StatusTypeDef hok = SSD1306_InitScreen(&hspi1);
+	char str[64];
+	int n = sprintf(str, "Initialization good: %d\n\r", hok);
+	CDC_Transmit_FS((uint8_t*) str, n);
+
+	HAL_Delay(100);
 
 	current.setup();
 	pos.setup();
 	pwm.startTiming();
 	pwm.startSwitching();
 	pwm.update(0, 10.0f);
+
+	char str1[] = "Quick Fox";
+	char str4[] = "(Brown)0123456";
+	char str2[] = "Jumped Over";
+	char str3[] = "the Lazy Dog";
+	bufwriter.clear();
+	bufwriter.writeLine8x16(str1);
+	bufwriter.newline();
+	bufwriter.writeLine6x8(str4);
+	bufwriter.writeLine6x8(str2);
+	bufwriter.writeLine6x8(str3);
+
+
+	SSD1306_writeBuf(screenbuf);
+
 }
 
 void loop() {
