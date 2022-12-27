@@ -35,7 +35,36 @@ public:
 	virtual MenuItem* enter() = 0;
 
 	virtual void init() = 0;
-	virtual void draw();
+	virtual void draw() = 0;
+};
+
+struct MotorData {
+	float rpm, rpm_set, id, iq, i, vd, vq, v, vbus, power;
+};
+
+class RootMenu : public MenuItem {
+protected:
+	MenuItem* child;
+	MotorData& data;
+public:
+	RootMenu(BufWriter& _buf, MotorData& _data) :
+		MenuItem(_buf, "Root"), data(_data) {
+		parent = this;
+	};
+
+	void link(MenuItem* _item) {
+		child = _item;
+		child->setParent(this);
+	}
+
+	MenuItem* up() { return child; };
+	MenuItem* down() { return child; };
+	MenuItem* left() { return child; };
+	MenuItem* right() { return child; };
+	MenuItem* enter() { return child; };
+
+	void init() {};
+	void draw();
 };
 
 class Menu : public MenuItem {

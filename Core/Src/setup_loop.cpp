@@ -15,7 +15,7 @@
 #include "usb_device.h"
 #include "usbd_cdc_if.h"
 #include "SSD1306.h"
-#include "BufWriter.h"
+#include "MenuContainer.h"
 
 
 #define ADC_TO_VOLTAGE (3.3f / 4095.0f)
@@ -73,6 +73,30 @@ GenericController controller(dt, pos, current, pwm, idqc, DELAY_CORR);
 uint8_t screenbuf[PAGES*COLUMNS];
 BufWriter bufwriter(screenbuf, PAGES, COLUMNS);
 
+int32_t rpm_test = 0;
+int32_t enable;
+
+MotorData motorData;
+
+RootMenu root(bufwriter, motorData);
+Menu mainmenu(bufwriter, "Main Menu");
+NumericEntry rpmsetting(bufwriter, "Motor Speed", &rpm_test, "Speed", "RPM", 1000, 5000, 10);
+FlagEntry enableflag(bufwriter, "Motor Enable", "Disabled", "Enabled", &enable, 0x1);
+
+Button upButton(UP_GPIO_Port, UP_Pin);
+Button downButton(DOWN_GPIO_Port, DOWN_Pin);
+Button leftButton(LEFT_GPIO_Port, LEFT_Pin);
+Button rightButton(RIGHT_GPIO_Port, RIGHT_Pin);
+Button enterButton(ENTER_GPIO_Port, ENTER_Pin);
+
+MenuContainer menuContainer(&root,
+		upButton,
+		downButton,
+		leftButton,
+		rightButton,
+		enterButton);
+
+
 TrigAngle angle;
 
 enum ControlMode {
@@ -108,12 +132,12 @@ void torqueModeHandler(vect_dq idq_target_setpoint) {
 	pos.getEMF(&emf_dq);
 
 	char str[256];
-	int len = sprintf(str, "%0.2f V\t"
-			"%0.2f\t"
-			"%0.2f V    \t"
-			"%0.2f\t%0.2f\t%0.2f A    \t"
-			"%0.2f RPM\t"
-			"%d\t"
+	int len = sprintf(str, "% 06.2f V       "
+			"% 06.2f  "
+			"% 06.2f V        "
+			"% 06.3f   % 06.3f   % 06.3f A        "
+			"% 0.0f RPM        "
+			"%d  "
 			"%d\n\r",
 			vbus,
 			pos.getMag(),
@@ -124,7 +148,7 @@ void torqueModeHandler(vect_dq idq_target_setpoint) {
 			HAL_GPIO_ReadPin(ENTER_GPIO_Port, ENTER_Pin));
 
 	HAL_UART_Transmit(&huart3, (uint8_t*) str, len, HAL_MAX_DELAY);
-	HAL_Delay(100);
+	HAL_Delay(10);
 }
 
 void velocityModeHandler(float speed_target, float kp, float ki) {
@@ -207,6 +231,10 @@ void setup() {
 	HAL_GPIO_WritePin(SCREEN_RESET_GPIO_Port, SCREEN_RESET_Pin, GPIO_PIN_SET);
 	HAL_Delay(100);
 
+	root.link(&mainmenu);
+	mainmenu.link(&rpmsetting);
+	mainmenu.link(&enableflag);
+
 
 	HAL_StatusTypeDef hok = SSD1306_InitScreen(&hspi1);
 	char str[64];
@@ -220,33 +248,22 @@ void setup() {
 	pwm.startTiming();
 	pwm.startSwitching();
 	pwm.update(0, 10.0f);
-
-	char str1[] = "Quick Fox";
-	char str4[] = "(Brown)0123456";
-	char str2[] = "Jumped Over";
-	char str3[] = "the Lazy Dog";
-	bufwriter.clear();
-	bufwriter.writeLine8x16(str1);
-	bufwriter.newline();
-	bufwriter.writeLine6x8(str4);
-	bufwriter.writeLine6x8(str2);
-	bufwriter.writeLine6x8(str3);
-
-
-	SSD1306_writeBuf(screenbuf);
-
 }
 
 void loop() {
 	// main.c while loop goes here
 
-	if (!HAL_GPIO_ReadPin(ENTER_GPIO_Port, ENTER_Pin)) {
-		mode = LEARNING_MODE;
-	}
-	if (mode != LEARNING_MODE && !HAL_GPIO_ReadPin(UP_GPIO_Port, UP_Pin)) {
-		fakepos.setElecVelocity(0.0f);
-		mode = STARTUP_MODE;
-	}
+//	if (!HAL_GPIO_ReadPin(ENTER_GPIO_Port, ENTER_Pin)) {
+//		mode = LEARNING_MODE;
+//	}
+//	if (mode != LEARNING_MODE && !HAL_GPIO_ReadPin(UP_GPIO_Port, UP_Pin)) {
+//		fakepos.setElecVelocity(0.0f);
+//		mode = STARTUP_MODE;
+//	}
+
+	menuContainer.execute();
+	SSD1306_writeBuf(screenbuf);
+
 	vect_dq targ = {0.0f, 0.75f};
 
 	switch (mode) {
@@ -332,13 +349,12 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			}
 
 
+			vect_dq vdq = {0.0f, 0.0f};
 			if (!enabled) {
 				idqc.reset();
-				vect_dq vdq = {0.0f, 0.0f};
 				pwm.setTargets(vdq);
 			} else {
 				idqc.setLimit(current.getVBUS() * 0.7f); // lol overmod
-				vect_dq vdq;
 
 				switch (mode) {
 				case STARTUP_MODE:
@@ -365,6 +381,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			default:
 				raw_angle = pos.calcPhaseAdjAngle(0.75f + DELAY_CORR);
 			}
+			motorData.rpm = pos.getMechVelocity() * (60.0f)/ (2.0f * PI);
+			motorData.rpm_set = rpm_test;
+			motorData.id = idq.d;
+			motorData.iq = idq.q;
+			motorData.vd = vdq.d;
+			motorData.vq = vdq.q;
+			motorData.power = idq.d * vdq.d + idq.q * vdq.q;
+			motorData.vbus = current.getVBUS();
+			menuContainer.update();
 		}
 		pwm.update(raw_angle, current.getVBUS());
 	}

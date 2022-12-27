@@ -7,6 +7,27 @@
 
 #include "MenuItem.h"
 
+void RootMenu::draw() {
+	buf.clear();
+	int n;
+	char str[64];
+	n = sprintf(str, "%d (%d) RPM", int(data.rpm), int(data.rpm_set));
+	buf.writeLine8x16(str, n);
+	buf.newline();
+
+	n = sprintf(str, "Id=% 06.3f Iq=% 06.3fA", data.id, data.iq);
+	buf.writeLine6x8(str, n);
+
+	n = sprintf(str, "Vd=% 0.2f Vq=% 0.2fV", data.vd, data.vq);
+	buf.writeLine6x8(str, n);
+
+	n = sprintf(str, "Power=% 0.2fW", data.power);
+	buf.writeLine6x8(str, n);
+
+	n = sprintf(str, "Vbus=% 0.2fV", data.vbus);
+	buf.writeLine6x8(str, n);
+}
+
 void Menu::link(MenuItem* _child) {
 	if (len < 16) {
 		children[len] = _child;
@@ -27,11 +48,10 @@ void Menu::draw() {
 	buf.clear();
 	buf.writeLine8x16(name, name_len);
 	buf.newline();
-	int8_t j = MAX(index+2, len);
-	j = MIN(j-4, 0);
-	for (int8_t i = 0; i<5; i++, j++) {
+	int8_t k = MIN(index+2, len);
+	int8_t j = MAX(k-4, 0);
+	for (int8_t i = 0; j<=k; i++, j++) {
 		char c = (j == index) ? '>' : ' ';
-		buf.writeChar6x8(c);
 		char str[64];
 		memset(str, 0, 32);
 		int n;
