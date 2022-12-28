@@ -11,20 +11,20 @@ void RootMenu::draw() {
 	buf.clear();
 	int n;
 	char str[64];
-	n = sprintf(str, "%d (%d) RPM", int(data.rpm), int(data.rpm_set));
+	n = sprintf(str, "(%5d)%5d RPM", int(data.rpm_set), int(data.rpm));
 	buf.writeLine8x16(str, n);
 	buf.newline();
 
-	n = sprintf(str, "Id=% 06.3f Iq=% 06.3fA", data.id, data.iq);
+	n = sprintf(str, "Id=% 6.3f Iq=% 6.3fA", data.id, data.iq);
 	buf.writeLine6x8(str, n);
 
-	n = sprintf(str, "Vd=% 0.2f Vq=% 0.2fV", data.vd, data.vq);
+	n = sprintf(str, "Vd=% 6.2f Vq=% 6.2fV", data.vd, data.vq);
 	buf.writeLine6x8(str, n);
 
-	n = sprintf(str, "Power=% 0.2fW", data.power);
+	n = sprintf(str, "Power=% 6.2fW", data.power);
 	buf.writeLine6x8(str, n);
 
-	n = sprintf(str, "Vbus=% 0.2fV", data.vbus);
+	n = sprintf(str, "Vbus=% 6.2fV", data.vbus);
 	buf.writeLine6x8(str, n);
 }
 

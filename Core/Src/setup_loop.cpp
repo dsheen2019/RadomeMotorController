@@ -132,11 +132,11 @@ void torqueModeHandler(vect_dq idq_target_setpoint) {
 	pos.getEMF(&emf_dq);
 
 	char str[256];
-	int len = sprintf(str, "% 06.2f V       "
-			"% 06.2f  "
-			"% 06.2f V        "
-			"% 06.3f   % 06.3f   % 06.3f A        "
-			"% 0.0f RPM        "
+	int len = sprintf(str, "% 6.2f V       "
+			"% 6.2f  "
+			"% 6.2f V        "
+			"% 6.3f   % 6.3f   % 6.3f A        "
+			"% 5.0f RPM        "
 			"%d  "
 			"%d\n\r",
 			vbus,
