@@ -19,13 +19,13 @@
 
 
 #define ADC_TO_VOLTAGE (3.3f / 4095.0f)
-#define CURRENT_SCALE (ADC_TO_VOLTAGE / (50.0f * 0.02f))
-#define VBUS_SCALE (ADC_TO_VOLTAGE * 6.1f)
+#define CURRENT_SCALE (ADC_TO_VOLTAGE / (50.0f * 0.02f)) // 50x shunt gain, 20 mohm shunt
+#define VBUS_SCALE (ADC_TO_VOLTAGE * 6.1f) // 51k and 10k divider
 
 #define DELAY_CORR 0.0f
 
-#define HOBBYKING_MOTOR
-//#define PUMP_MOTOR1
+//#define HOBBYKING_MOTOR
+#define PUMP_MOTOR1
 
 #ifdef PUMP_MOTOR1
 #ifdef MOTOR_DEFINED
@@ -33,7 +33,7 @@
 #endif
 #define MOTOR_DEFINED
 #define NUM_POLES 3
-const vect_dq Ldq = {250e-6f, 250e-6f};
+const vect_dq Ldq = {300e-6f, 300e-6f};
 const float R_phase = 3.8f;
 #endif
 
@@ -106,7 +106,6 @@ enum ControlMode {
 	LEARNING_MODE
 };
 
-uint16_t i = 0;
 
 float mod_meas;
 uint32_t phase_meas;

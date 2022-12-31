@@ -58,7 +58,7 @@ HAL_StatusTypeDef SSD1306_InitScreen(SPI_HandleTypeDef *hspi) {   // init screen
 		if (_vccstate == SSD1306_EXTERNALVCC){
 			SSD1306_command1(0x9F);
 		} else {
-			SSD1306_command1(0xCF);
+			SSD1306_command1(0x3f);
 		}
 
 		SSD1306_command1(SSD1306_SETPRECHARGE);                  // 0xd9
@@ -78,6 +78,7 @@ HAL_StatusTypeDef SSD1306_InitScreen(SPI_HandleTypeDef *hspi) {   // init screen
 
 		SSD1306_command1(SSD1306_DISPLAYON);//--turn on oled panel
 		HAL_Delay(10);
+//		SSD1306_command1(SSD1306_DISPLAYOFF);
 
 
 		SSD1306_clearDisplay();
