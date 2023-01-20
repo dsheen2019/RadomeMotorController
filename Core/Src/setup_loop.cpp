@@ -68,19 +68,28 @@ TestPositionSensor fakepos(dt, NUM_POLES);
 PWMGenerator_WVU pwm(&htim1);
 
 CurrentDQController idqc(dt, 10.0f, Ldq, 0.3f);
-GenericController controller(dt, pos, current, pwm, idqc, DELAY_CORR);
+PIController vel_pi(dt, 0.750f, 0.0f, 0.0f);
+//GenericController controller(dt, pos, current, pwm, idqc, DELAY_CORR);
 
 uint8_t screenbuf[PAGES*COLUMNS];
 BufWriter bufwriter(screenbuf, PAGES, COLUMNS);
 
-int32_t rpm_test = 0;
-int32_t enable;
+int32_t rpm_test = 2500;
+int32_t kp_test = 20;
+int32_t ki_test = 5;
+int32_t max_current = 750;
+int32_t enable = 0;
 
 MotorData motorData;
 
 RootMenu root(bufwriter, motorData);
 Menu mainmenu(bufwriter, "Main Menu");
-NumericEntry rpmsetting(bufwriter, "Motor Speed", &rpm_test, "Speed", "RPM", 1000, 5000, 10);
+
+NumericEntry rpmsetting(bufwriter, "Motor Speed", &rpm_test, "Speed", "RPM", 1000, 5000, 50);
+NumericEntry kpsetting(bufwriter, "Prop. Gain", &kp_test, "Gain", "mA/(rad/s)", 0, 100, 1);
+NumericEntry kisetting(bufwriter, "Integral Gain", &ki_test, "Gain", "rad/s", 0, 100, 1);
+NumericEntry maxcurrentsetting(bufwriter, "Max. Current", &max_current, "Imax", "mA", 250, 1500, 50);
+
 FlagEntry enableflag(bufwriter, "Motor Enable", "Disabled", "Enabled", &enable, 0x1);
 
 Button upButton(UP_GPIO_Port, UP_Pin);
@@ -115,8 +124,11 @@ volatile uint32_t motor_angle;
 ControlMode mode = TORQUE_MODE;
 
 vect_dq iphase_dq, iphase_dq_slope;
-
 vect_dq idq_target = {0.0f, 0.0f};
+float vel_kp = 0.0f;
+float vel_ki = 0.0f;
+float vel_target = 0.0f;
+float vel_max_i = 0.750f;
 
 void torqueModeHandler(vect_dq idq_target_setpoint) {
 	idq_target.d = idq_target_setpoint.d;
@@ -150,8 +162,29 @@ void torqueModeHandler(vect_dq idq_target_setpoint) {
 	HAL_Delay(10);
 }
 
-void velocityModeHandler(float speed_target, float kp, float ki) {
+void velocityModeHandler(int32_t speed_target, int32_t kp, int32_t ki, int32_t max_i) {
+	vel_target = (2.0f * PI / (60.0f)) * float(speed_target);
+	vel_kp = float(kp) * 0.001f;
+	vel_ki = float(ki);
+	vel_max_i = float(max_i) * 0.001f;
 
+	vel_pi.setLimit(vel_max_i);
+	vel_pi.setGains(vel_kp, vel_ki);
+
+	char str[256];
+	int len = sprintf(str, "% 6.2f V       "
+			"% 6.2f  "
+			"% 6.2f V        "
+			"% 6.3f   % 6.3f        "
+			"% 5.0f RPM\n\r",
+			current.getVBUS(),
+			pos.getMag(),
+			idqc.getMag(),
+			iphase_dq.d, iphase_dq.q,
+			pos.getMechVelocity() * (60.0f)/ (2.0f * PI));
+
+	HAL_UART_Transmit(&huart3, (uint8_t*) str, len, HAL_MAX_DELAY);
+	HAL_Delay(10);
 }
 
 vect_dq vdq_target = {0.0f, 0.0f};
@@ -210,7 +243,7 @@ void learningModeHandler() {
 	vdq_target.d = 0.0f;
 	vdq_target.q = 0.0f;
 	HAL_Delay(5000);
-	mode = TORQUE_MODE;
+	mode = VELOCITY_MODE;
 }
 
 
@@ -233,13 +266,12 @@ void setup() {
 	root.link(&mainmenu);
 	mainmenu.link(&rpmsetting);
 	mainmenu.link(&enableflag);
+	mainmenu.link(&kpsetting);
+	mainmenu.link(&kisetting);
+	mainmenu.link(&maxcurrentsetting);
 
 
-	HAL_StatusTypeDef hok = SSD1306_InitScreen(&hspi1);
-	char str[64];
-	int n = sprintf(str, "Initialization good: %d\n\r", hok);
-	CDC_Transmit_FS((uint8_t*) str, n);
-
+	SSD1306_InitScreen(&hspi1);
 	HAL_Delay(100);
 
 	current.setup();
@@ -266,12 +298,13 @@ void loop() {
 	vect_dq targ = {0.0f, 0.75f};
 
 	switch (mode) {
-	case STARTUP_MODE:
 	case TORQUE_MODE:
 		torqueModeHandler(targ);
 		break;
+	case STARTUP_MODE:
+
 	case VELOCITY_MODE:
-//		velocityModeHandler(target_velocity, kp, ki);
+		velocityModeHandler(rpm_test, kp_test, ki_test, max_current);
 		break;
 	case LEARNING_MODE:
 		learningModeHandler();
@@ -281,8 +314,6 @@ void loop() {
 	int n = sprintf(usb_str, "Hello World! (from USB)\n\r");
 	CDC_Transmit_FS((uint8_t*) usb_str, n);
 }
-
-volatile bool enabled = false;
 
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
@@ -297,11 +328,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 				float fakeomega = fakepos.getElecVelocity();
 				if (fakeomega > 1000.0f) {
 					fakepos.setElecVelocity(0.0f);
-					mode = TORQUE_MODE;
+//					mode = VELOCITY_MODE;
 				} else if (fakeomega > 250.0f){
 					fakepos.setElecVelocity(fakeomega + 500.0f * dt);
 				} else {
-					fakepos.setElecVelocity(fakeomega + 200.0f * dt);
+					fakepos.setElecVelocity(fakeomega + 100.0f * dt);
 				}
 			}
 			case LEARNING_MODE:
@@ -336,23 +367,25 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 				idq_target.q = 0.0f;
 			}
 
-			if (pos.isTracking() && mode == STARTUP_MODE && fakepos.getElecVelocity() > 750.0f) {
-				mode = TORQUE_MODE;
+			if (pos.isTracking() && mode == STARTUP_MODE && fakepos.getElecVelocity() > 500.0f) {
+				mode = VELOCITY_MODE;
 			}
 
 			if (current.getVBUS() < 10.0f) {
-				enabled = false;
+				enable = 0;
 			}
-			if (current.getVBUS() > 15.0f) {
-				enabled = true;
-			}
-
 
 			vect_dq vdq = {0.0f, 0.0f};
-			if (!enabled) {
+			if (!enable) {
 				idqc.reset();
 				pwm.setTargets(vdq);
 			} else {
+				if (!pos.isTracking() && mode != STARTUP_MODE) {
+					mode = STARTUP_MODE;
+					fakepos.setElecVelocity(0.0f);
+					idq_target.d = vel_max_i;
+					idq_target.q = 0.0f;
+				}
 				idqc.setLimit(current.getVBUS() * 0.7f); // lol overmod
 
 				switch (mode) {
@@ -363,7 +396,9 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 					vdq = idqc.update(idq_target, idq, pos.getElecVelocity());
 					break;
 				case VELOCITY_MODE:
-					vdq.d = vdq.q = 0.0f;
+					idq_target.d = 0.0f;
+					idq_target.q = vel_pi.update(pos.getMechVelocity(), vel_target);
+					vdq = idqc.update(idq_target, idq, pos.getElecVelocity());
 					break;
 				case LEARNING_MODE:
 					vdq = vdq_target;

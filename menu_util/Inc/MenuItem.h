@@ -57,11 +57,11 @@ public:
 		child->setParent(this);
 	}
 
-	MenuItem* up() { return child; };
-	MenuItem* down() { return child; };
-	MenuItem* left() { return child; };
-	MenuItem* right() { return child; };
-	MenuItem* enter() { return child; };
+	MenuItem* up() { return enter(); };
+	MenuItem* down() { return enter(); };
+	MenuItem* left() { return enter(); };
+	MenuItem* right() { return enter(); };
+	MenuItem* enter() { child->init(); return child; };
 
 	void init() {};
 	void draw();

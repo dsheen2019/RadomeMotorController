@@ -43,7 +43,7 @@ bool EMFPositionSensor::update() {
 		angle_err -= PI_OVER_2;
 	}
 
-	elec_angle = calcPhaseAdjAngle(1.0f); // increment by 1/2 step angle
+	elec_angle = calcPhaseAdjAngle(1.0f); // increment by 1 time step
 	elec_angle += angle_err;
 	elec_vel += beta * calcVelocity(angle_err);
 

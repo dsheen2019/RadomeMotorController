@@ -40,6 +40,7 @@ MenuItem* Menu::enter() {
 	if(index == 0 || index > len) {
 		return parent;
 	} else {
+		children[index-1]->init();
 		return children[index-1];
 	}
 }
@@ -50,6 +51,7 @@ void Menu::draw() {
 	buf.newline();
 	int8_t k = MIN(index+2, len);
 	int8_t j = MAX(k-4, 0);
+	k = MIN(j+4, len);
 	for (int8_t i = 0; j<=k; i++, j++) {
 		char c = (j == index) ? '>' : ' ';
 		char str[64];
