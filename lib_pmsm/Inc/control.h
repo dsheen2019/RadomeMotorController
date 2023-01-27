@@ -135,4 +135,20 @@ public:
 	vect_dq getIdq() {return idq;}
 };
 
+class LowPassFilter {
+protected:
+	float dt;
+	float w;
+	float var;
+public:
+	LowPassFilter(float _dt, float _w) : dt(_dt), w(_w), var(0.0f){}
+	void setFreq(float _w) {w = _w;}
+	float update(float _var) {
+		float frac = w * dt;
+		var = var*(1.0f - frac) + frac*_var;
+		return var;
+	}
+	float getValue() {return var;}
+};
+
 #endif /* INC_CONTROL_H_ */

@@ -66,6 +66,7 @@ EMFPositionSensor pos(current, dt, NUM_POLES, Ldq, R_phase);
 TestPositionSensor fakepos(dt, NUM_POLES);
 
 PWMGenerator_WVU pwm(&htim1);
+LowPassFilter rpmfilter(dt, 100.0f);
 
 CurrentDQController idqc(dt, 10.0f, Ldq, 0.3f);
 PIController vel_pi(dt, 0.750f, 0.0f, 0.0f);
@@ -181,7 +182,7 @@ void velocityModeHandler(int32_t speed_target, int32_t kp, int32_t ki, int32_t m
 			pos.getMag(),
 			idqc.getMag(),
 			iphase_dq.d, iphase_dq.q,
-			pos.getMechVelocity() * (60.0f)/ (2.0f * PI));
+			rpmfilter.getValue() * (60.0f)/ (2.0f * PI));
 
 	HAL_UART_Transmit(&huart3, (uint8_t*) str, len, HAL_MAX_DELAY);
 	HAL_Delay(10);
@@ -281,6 +282,7 @@ void setup() {
 	pwm.update(0, 10.0f);
 }
 
+uint8_t foobar = 0;
 void loop() {
 	// main.c while loop goes here
 
@@ -293,7 +295,9 @@ void loop() {
 //	}
 
 	menuContainer.execute();
-	SSD1306_writeBuf(screenbuf);
+	if (((++foobar) & 0b11) == 0) {
+		SSD1306_writeBuf(screenbuf);
+	}
 
 	vect_dq targ = {0.0f, 0.75f};
 
@@ -313,6 +317,7 @@ void loop() {
 	char usb_str[256];
 	int n = sprintf(usb_str, "Hello World! (from USB)\n\r");
 	CDC_Transmit_FS((uint8_t*) usb_str, n);
+	HAL_Delay(10);
 }
 
 
@@ -376,6 +381,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			}
 
 			vect_dq vdq = {0.0f, 0.0f};
+			rpmfilter.update(pos.getMechVelocity());
 			if (!enable) {
 				idqc.reset();
 				pwm.setTargets(vdq);
@@ -397,7 +403,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 					break;
 				case VELOCITY_MODE:
 					idq_target.d = 0.0f;
-					idq_target.q = vel_pi.update(pos.getMechVelocity(), vel_target);
+					idq_target.q = vel_pi.update(rpmfilter.getValue(), vel_target);
 					vdq = idqc.update(idq_target, idq, pos.getElecVelocity());
 					break;
 				case LEARNING_MODE:
@@ -415,7 +421,8 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 			default:
 				raw_angle = pos.calcPhaseAdjAngle(0.75f + DELAY_CORR);
 			}
-			motorData.rpm = pos.getMechVelocity() * (60.0f)/ (2.0f * PI);
+
+			motorData.rpm = rpmfilter.getValue() * (60.0f)/ (2.0f * PI);
 			motorData.rpm_set = rpm_test;
 			motorData.id = idq.d;
 			motorData.iq = idq.q;
