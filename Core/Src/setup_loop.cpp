@@ -58,6 +58,8 @@ extern TIM_HandleTypeDef htim1, htim6;
 extern ADC_HandleTypeDef hadc1, hadc2;
 extern UART_HandleTypeDef huart3;
 extern SPI_HandleTypeDef hspi1;
+extern RTC_HandleTypeDef hrtc;
+
 
 CurrentSensorDualADC_BackEMF current(&hadc1, &hadc2,
 		CURRENT_SCALE, VBUS_SCALE, ADC_SAMPLES);
@@ -315,7 +317,15 @@ void loop() {
 		break;
 	}
 	char usb_str[256];
-	int n = sprintf(usb_str, "Hello World! (from USB)\n\r");
+	RTC_TimeTypeDef sTime;
+	RTC_DateTypeDef sDate;
+	sTime.SecondFraction = 0xff;
+	HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BCD);
+	HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BCD);
+	int n = sprintf(usb_str, "%02x/%02x/20%02x %02x:%02x:%02x.%02x\n\r",
+			sDate.Month, sDate.Date, sDate.Year,
+			sTime.Hours, sTime.Minutes, sTime.Seconds, sTime.SubSeconds
+			);
 	CDC_Transmit_FS((uint8_t*) usb_str, n);
 	HAL_Delay(10);
 }

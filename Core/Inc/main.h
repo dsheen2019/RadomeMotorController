@@ -79,26 +79,6 @@ void Error_Handler(void);
 #define SOA_GPIO_Port GPIOA
 #define VBUS_SENSE_Pin GPIO_PIN_3
 #define VBUS_SENSE_GPIO_Port GPIOA
-#define SCREEN_RESET_Pin GPIO_PIN_6
-#define SCREEN_RESET_GPIO_Port GPIOA
-#define SCREEN_DATASEL_Pin GPIO_PIN_4
-#define SCREEN_DATASEL_GPIO_Port GPIOC
-#define SCREEN_CS_Pin GPIO_PIN_0
-#define SCREEN_CS_GPIO_Port GPIOB
-#define USB_DETECT_Pin GPIO_PIN_6
-#define USB_DETECT_GPIO_Port GPIOC
-#define RPM_CTR_Pin GPIO_PIN_15
-#define RPM_CTR_GPIO_Port GPIOA
-#define UP_Pin GPIO_PIN_10
-#define UP_GPIO_Port GPIOC
-#define LEFT_Pin GPIO_PIN_11
-#define LEFT_GPIO_Port GPIOC
-#define ENTER_Pin GPIO_PIN_3
-#define ENTER_GPIO_Port GPIOB
-#define RIGHT_Pin GPIO_PIN_4
-#define RIGHT_GPIO_Port GPIOB
-#define DOWN_Pin GPIO_PIN_5
-#define DOWN_GPIO_Port GPIOB
 
 /* USER CODE BEGIN Private defines */
 
