@@ -12,127 +12,92 @@
 #include "angle.h"
 #include "string.h"
 
+class ADCReader {
+protected:
+	static const int samples;
+	static const int reps;
+	static ADC_HandleTypeDef *hadc_ch1;
+	static ADC_HandleTypeDef *hadc_ch2;
+	static uint16_t adc_buf1[64];
+	static uint16_t adc_buf2[64];
+	static bool ready1;
+	static bool ready2;
+
+	uint16_t* adc_val_ptr;
+	const float scale;
+	const int16_t offset;
+public:
+	ADCReader() : adc_val_ptr(nullptr), scale(1.0f), offset(0) {};
+	ADCReader(ADC_HandleTypeDef *_hadc, int _seq, float _scale, int16_t _offset = 0);
+
+	static void start() {
+		HAL_Delay(100);
+
+		HAL_ADCEx_Calibration_Start(hadc_ch1, ADC_SINGLE_ENDED);
+		HAL_ADCEx_Calibration_Start(hadc_ch2, ADC_SINGLE_ENDED);
+		HAL_Delay(100);
+
+		HAL_ADC_Start_DMA(hadc_ch1, (uint32_t*) adc_buf1, samples*reps);
+		HAL_ADC_Start_DMA(hadc_ch2, (uint32_t*) adc_buf2, samples*reps);
+	}
+
+	static void callback(ADC_HandleTypeDef *hadc) {
+		if (hadc == hadc_ch1) {
+			hadc->Instance->CR |= ADC_CR_ADSTART;
+			ready1 = true;
+			return;
+		}
+		if (hadc == hadc_ch2) {
+			hadc->Instance->CR |= ADC_CR_ADSTART;
+			ready2 = true;
+			return;
+		}
+	}
+
+	static bool isReady() {
+		return ready1 && ready2;
+	}
+
+	static void clearReadyFlag() {
+		ready1 = ready2 = false;
+	}
+
+	static bool waitUntilReady(TIM_HandleTypeDef *htim, uint32_t timeout) {
+		while (isReady() && (htim->Instance->CNT < timeout));
+		return isReady();
+	}
+
+	float computeAverage() const;
+//	float computeSlope();
+};
+
 class CurrentSensor {
 protected:
-	ADC_HandleTypeDef *hadc1;
-	const float current_scale;
-	const float vbus_scale;
-	uint16_t* adc_buf1;
-	const uint16_t seqlen;
-	const uint16_t reps;
-	const uint16_t buflen;
-
-	volatile bool adc_ready1;
-	bool dataGood;
+	ADCReader &phaseU, &phaseV, &phaseW, &vbusMeas;
 
 	vect_uvw currents;
 	vect_uvw slopes;
 	float vbus;
 
 public:
-	CurrentSensor(ADC_HandleTypeDef *_hadc1,
-			float _current_scale, float _vbus_scale,
-			uint16_t _seqlen, uint16_t _reps = 1) :
-				hadc1(_hadc1), current_scale(_current_scale),
-				vbus_scale(_vbus_scale), seqlen(_seqlen),
-				reps(_reps), buflen(_seqlen * _reps) {
-		adc_buf1 = new uint16_t[buflen];
-		memset(adc_buf1, 0, sizeof(uint16_t)*buflen);
+	CurrentSensor(ADCReader &_phaseU, ADCReader &_phaseV, ADCReader &_phaseW, ADCReader &_vbusMeas) :
+		phaseU(_phaseU), phaseV(_phaseV), phaseW(_phaseW), vbusMeas(_vbusMeas),
+		currents{0.0f, 0.0f, 0.0f}, slopes{0.0f, 0.0f, 0.0f}, vbus(0.0f) {}
 
-	}
-	~CurrentSensor();
+	bool update(TIM_HandleTypeDef *htim, uint32_t timeout = 0xff) {
+		bool dataGood = ADCReader::waitUntilReady(htim, timeout);
+		currents.u = phaseU.computeAverage();
+		currents.v = phaseV.computeAverage();
+		currents.w = phaseW.computeAverage();
 
-	void setup() {
-		HAL_ADC_Start_DMA(hadc1, (uint32_t*) adc_buf1, buflen);
-	}
+		vbus = vbusMeas.computeAverage();
 
-	void retriggerADC(ADC_HandleTypeDef *hadc) {
-		if (hadc->Instance == ADC1) {
-			hadc->Instance->CR |= ADC_CR_ADSTART;
-			adc_ready1 = true;
-		}
-	}
-
-	bool adcReady() {return adc_ready1;}
-	void ADCFlagReset() {adc_ready1 = false;}
-	void waitForADC(uint32_t ticks = 0xffffffff) {
-		uint32_t tick = 0;
-		while (!adcReady() && ++tick < ticks);
-		dataGood = adcReady();
-	}
-
-	// Unique for every current sensor
-	// no good way of characterizing ADC mapping
-	virtual void mapBufValues() = 0;
-
-	bool update(uint32_t ticks = 0xff) {
-		waitForADC(ticks);
-		mapBufValues();
-		ADCFlagReset();
+		ADCReader::clearReadyFlag();
 		return dataGood;
 	}
-	vect_uvw getCurrents() {return currents;}
-	vect_uvw getCurrentSlopes() {return slopes;}
-	float getVBUS() {return vbus;}
-};
-
-class CurrentSensorDualADC : public CurrentSensor {
-protected:
-	ADC_HandleTypeDef *hadc2;
-	uint16_t* adc_buf2;
-	volatile bool adc_ready2;
-public:
-	CurrentSensorDualADC(ADC_HandleTypeDef *_hadc1, ADC_HandleTypeDef *_hadc2,
-			float _current_scale, float _vbus_scale,
-			uint16_t _seqlen, uint16_t _reps = 1) :
-				CurrentSensor(_hadc1, _current_scale, _vbus_scale, _seqlen, _reps),
-				hadc2(_hadc2) {
-		adc_buf2 = new uint16_t[buflen];
-		memset(adc_buf2, 0, sizeof(uint16_t)*buflen);
-	}
-	~CurrentSensorDualADC();
-	void setup() {
-		HAL_ADC_Start_DMA(hadc1, (uint32_t*) adc_buf1, buflen);
-		HAL_ADC_Start_DMA(hadc2, (uint32_t*) adc_buf2, buflen);
-	}
-
-	void retriggerADC(ADC_HandleTypeDef *hadc) {
-		if (hadc->Instance == ADC1) {
-			hadc->Instance->CR |= ADC_CR_ADSTART;
-			adc_ready1 = true;
-		}
-		else if (hadc->Instance == ADC2) {
-			hadc->Instance->CR |= ADC_CR_ADSTART;
-			adc_ready2 = true;
-		}
-	}
-
-	bool adcReady() {return adc_ready1 && adc_ready2;}
-	void ADCFlagReset() {adc_ready1 = adc_ready2 = false;}
-};
-
-class CurrentSensorDualADC_BigDyno : public CurrentSensorDualADC {
-protected:
-	const float vlogic_scale;
-	const float temp_scale;
-	float vlogic;
-	float temp;
-public:
-	CurrentSensorDualADC_BigDyno(ADC_HandleTypeDef *_hadc1, ADC_HandleTypeDef *_hadc2,
-			float _current_scale, float _vbus_scale, float _vlogic_scale, float _temp_scale) :
-				CurrentSensorDualADC(_hadc1, _hadc2, _current_scale, _vbus_scale, 3, 1),
-				vlogic_scale(_vlogic_scale), temp_scale(_temp_scale){}
-	void mapBufValues();
-	float getVlogic() {return vlogic;}
-	float getTemp() {return temp;}
-};
-
-class CurrentSensorDualADC_BackEMF : public CurrentSensorDualADC {
-public:
-	CurrentSensorDualADC_BackEMF(ADC_HandleTypeDef *_hadc1, ADC_HandleTypeDef *_hadc2,
-			float _current_scale, float _vbus_scale, float _reps) :
-				CurrentSensorDualADC(_hadc1, _hadc2, _current_scale, _vbus_scale, 2, _reps) {}
-	void mapBufValues();
+	vect_uvw getCurrents() const {return currents;}
+	vect_uvw getCurrentSlopes() const {return slopes;}
+	float getVBUS() const {return vbus;}
 };
 
 

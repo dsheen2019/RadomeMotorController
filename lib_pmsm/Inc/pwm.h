@@ -27,11 +27,14 @@ public:
 		u(0), v(0), w(0) {}
 	void startTiming();
 	void setTargets(vect_dq& _vdq) {vdq = _vdq;}
-	void update(uint32_t, float);
+	void setAngle(uint32_t);
+	void update(float);
 	virtual void writePWM() = 0;
 	void setPeriod(uint16_t period) {__HAL_TIM_SET_AUTORELOAD(htim, period); }
 	void startSwitching();
 	void stopSwitching();
+	vect_dq getVdq() {return vdq;}
+	vect_uvw getVuvw() {return vuvw;}
 };
 
 class PWMGenerator_UVW : public PWMGenerator {

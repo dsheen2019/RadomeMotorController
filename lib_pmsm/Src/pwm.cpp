@@ -13,30 +13,43 @@ void PWMGenerator::startTiming() {
 }
 
 void PWMGenerator::startSwitching() {
-	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_1);
-	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_2);
-	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_3);
+//	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_1);
+//	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_2);
+//	HAL_TIM_PWM_Start(htim, TIM_CHANNEL_3);
+//
+//	HAL_TIMEx_PWMN_Start(htim, TIM_CHANNEL_1);
+//	HAL_TIMEx_PWMN_Start(htim, TIM_CHANNEL_2);
+//	HAL_TIMEx_PWMN_Start(htim, TIM_CHANNEL_3);
+	htim->Instance->CCER |= 0x555;
 
-	HAL_TIMEx_PWMN_Start(htim, TIM_CHANNEL_1);
-	HAL_TIMEx_PWMN_Start(htim, TIM_CHANNEL_2);
-	HAL_TIMEx_PWMN_Start(htim, TIM_CHANNEL_3);
+	__HAL_TIM_MOE_ENABLE(htim);
+//    __HAL_TIM_ENABLE(htim);
+
 }
 
 void PWMGenerator::stopSwitching() {
-	HAL_TIM_PWM_Stop(htim, TIM_CHANNEL_1);
-	HAL_TIM_PWM_Stop(htim, TIM_CHANNEL_2);
-	HAL_TIM_PWM_Stop(htim, TIM_CHANNEL_3);
+//	HAL_TIM_PWM_Stop(htim, TIM_CHANNEL_1);
+//	HAL_TIM_PWM_Stop(htim, TIM_CHANNEL_2);
+//	HAL_TIM_PWM_Stop(htim, TIM_CHANNEL_3);
+//
+//	HAL_TIMEx_PWMN_Stop(htim, TIM_CHANNEL_1);
+//	HAL_TIMEx_PWMN_Stop(htim, TIM_CHANNEL_2);
+//	HAL_TIMEx_PWMN_Stop(htim, TIM_CHANNEL_3);
 
-	HAL_TIMEx_PWMN_Stop(htim, TIM_CHANNEL_1);
-	HAL_TIMEx_PWMN_Stop(htim, TIM_CHANNEL_2);
-	HAL_TIMEx_PWMN_Stop(htim, TIM_CHANNEL_3);
+	htim->Instance->CCER &= ~0x555;
+
+	__HAL_TIM_MOE_DISABLE(htim);
+
+}
+
+void PWMGenerator::setAngle(uint32_t _angle) {
+	angle.setAngle_int(_angle);
 }
 // Low side connected to non-inverting input, PWM mode 1
-void PWMGenerator::update(uint32_t _angle, float vbus) {
+void PWMGenerator::update(float vbus) {
 	const uint16_t period = __HAL_TIM_GET_AUTORELOAD(htim);
 	const float volt_to_cmd = -float(period) / vbus; // inversion necessary
 
-	angle.setAngle_int(_angle);
 	vuvw = angle.dq_to_uvw(vdq);
 
 	int16_t u_cmd = int16_t(volt_to_cmd * vuvw.u);
@@ -53,6 +66,11 @@ void PWMGenerator::update(uint32_t _angle, float vbus) {
 	u = CLIP(u_cmd + midrange, adc_offset, period);
 	v = CLIP(v_cmd + midrange, adc_offset, period);
 	w = CLIP(w_cmd + midrange, adc_offset, period);
+
+	vuvw.u = float(u) / volt_to_cmd;
+	vuvw.v = float(v) / volt_to_cmd;
+	vuvw.w = float(w) / volt_to_cmd;
+
 	writePWM();
 }
 

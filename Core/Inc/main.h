@@ -45,6 +45,51 @@ extern "C" {
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
 
+#define AZIMUTH
+//#define ELEVATION
+
+#ifdef AZIMUTH
+#ifdef MOTOR_DEFINED
+#error Multiple motor definition!
+#endif
+#define MOTOR_DEFINED
+
+#define ID_STR "AZIMUTH"
+
+#define OFFSET 0x90000000
+#define ID 1
+
+#define GEAR_REDUCTION 488.7f
+#define CAN_ID 0x10
+
+#endif
+
+#ifdef ELEVATION
+#ifdef MOTOR_DEFINED
+#error Multiple motor definition!
+#endif
+#define MOTOR_DEFINED
+
+#define ID_STR "ELEVATION"
+
+#define OFFSET 0xa2000000
+#define ID 2
+
+#define GEAR_REDUCTION 1078.21f
+#define CAN_ID 0x20
+
+#endif
+
+#ifndef MOTOR_DEFINED
+#error No motor defined!
+#endif
+
+#define MAX_MOTOR_SLEW 40.0f
+#define MAX_MOTOR_VELOCITY 200.0f
+//#define MAX_MOTOR_VELOCITY 50.0f
+#define VELOCITY_LSB ((3.0f * PI) / (3600.0f * 180.0f)) // 3 arcseconds/s, max speed is about 27 dps, earth rotation is 5 LSB
+#define CURRENT_LSB 0.001f // LSB is 1 mA
+
 /* USER CODE END EC */
 
 /* Exported macro ------------------------------------------------------------*/
@@ -67,7 +112,7 @@ void Error_Handler(void);
 #define DEAD_TIME 140
 #define ADC_SEQ_LEN 2
 #define PWM_ADC_TRIG (ADC_CLK_SCALE * ADC_SEQ_LEN * ADC_SAMPLES / 2)
-#define PWM_FREQ 25000
+#define PWM_FREQ 20000
 #define ADC_CLK_SCALE (3 * 25)
 #define PWM_PERIOD (CLOCK_FREQ / (PWM_FREQ * 2))
 #define ADC_SW_OFFSET 180
@@ -79,6 +124,8 @@ void Error_Handler(void);
 #define SOA_GPIO_Port GPIOA
 #define VBUS_SENSE_Pin GPIO_PIN_3
 #define VBUS_SENSE_GPIO_Port GPIOA
+#define SPI1_CS_Pin GPIO_PIN_4
+#define SPI1_CS_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

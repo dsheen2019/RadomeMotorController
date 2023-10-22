@@ -9,33 +9,42 @@
 
 bool EMFPositionSensor::update() {
 	vect_uvw current = cur.getCurrents();
-	vect_uvw slope = cur.getCurrentSlopes();
+	vect_uvw pwm_uvw = pwm.getVuvw();
+
+//	vect_uvw slope = cur.getCurrentSlopes();
 
 	angle_est.setAngle_int(elec_angle);
 	vect_dq current_dq = angle_est.uvw_to_dq(current);
-	vect_dq slope_dq = angle_est.uvw_to_dq(slope);
+	vect_dq pwm_dq = angle_est.uvw_to_dq(pwm_uvw);
+	vect_dq emf_inst;
 
-	emf.d = -(slope_dq.d * Ldq.d + current_dq.d * R);
-	emf.q = -(slope_dq.q * Ldq.q + current_dq.q * R);
+//	vect_dq slope_dq = angle_est.uvw_to_dq(slope);
 
-	const float upper_thresh = 0.3f;
-	const float lower_thresh = 0.2f;
+//	emf.d = -(slope_dq.d * Ldq.d + current_dq.d * R);
+//	emf.q = -(slope_dq.q * Ldq.q + current_dq.q * R);
+	emf_inst.d = pwm_dq.d - current_dq.d * R + elec_vel*Ldq.q*current_dq.q;
+	emf_inst.q = pwm_dq.q - current_dq.q * R + elec_vel*Ldq.d*current_dq.d;
+
+	const float upper_thresh = 1.0f;
+	const float lower_thresh = 0.5f;
 	const float alpha = MIN(0.1f, 1000.0f * dt); // 1 ms convergence time
 	const float beta = MIN(0.02f, 200.0f * dt);   // 5 ms convergence time
 
-	vect_dq emf_avg;
 
-	emf_avg.d = INTERP(0.0f, emf.d, alpha);
+	emf.d = INTERP(0.0f, emf_inst.d, alpha);
 	if (reverse) {
-		emf_avg.q = INTERP(-emf_mag, emf.q, alpha);
+		emf.q = INTERP(-emf_mag, emf_inst.q, alpha);
 	} else {
-		emf_avg.q = INTERP(emf_mag, emf.q, alpha);
+		emf.q = INTERP(emf_mag, emf_inst.q, alpha);
 	}
 
 	uint32_t angle_err;
 	const uint32_t PI_OVER_2 = 0x40000000;
 
-	cordic_modphase(emf_avg.d, emf_avg.q, &emf_mag, &angle_err);
+//	cordic_modphase(emf_inst.d, emf_inst.q, &emf_inst_mag, &angle_err);
+
+
+	cordic_modphase(emf.d, emf.q, &emf_mag, &angle_err);
 
 	if (reverse) {
 		angle_err += PI_OVER_2;

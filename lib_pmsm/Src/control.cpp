@@ -46,6 +46,16 @@ vect_dq CurrentDQController::update(vect_dq &target, vect_dq &current, float ome
 	return vphase;
 };
 
+uint32_t ParentController::angle = 0;
+float ParentController::omega = 0;
+vect_uvw ParentController::iuvw = {0.0f, 0.0f, 0.0f};
+vect_dq ParentController::idq = {0.0f, 0.0f};
+vect_dq ParentController::vdq = {0.0f, 0.0f};
+float ParentController::vbus = 0.0f;
+
+bool ParentController::enable = false;
+bool ParentController::shutdown = false;
+
 void GenericController::update(vect_dq &target) {
 	float omega = pos.getElecVelocity();
 	i_phase.setAngle_int(pos.calcPhaseAdjAngle(delay_corr));
@@ -63,5 +73,6 @@ void GenericController::update(vect_dq &target) {
 	vdq = idqc.update(target, idq, omega);
 
 	pwm.setTargets(vdq);
-	pwm.update(pos.calcPhaseAdjAngle(0.75f + delay_corr), current.getVBUS());
+	pwm.setAngle(pos.calcPhaseAdjAngle(0.75f + delay_corr));
+	pwm.update(current.getVBUS());
 }
