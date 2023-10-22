@@ -31,6 +31,7 @@ extern ADC_HandleTypeDef hadc1, hadc2;
 extern UART_HandleTypeDef huart1;
 extern SPI_HandleTypeDef hspi1, hspi3;
 extern FDCAN_HandleTypeDef hfdcan1;
+extern IWDG_HandleTypeDef hiwdg;
 
 CANHandler canHandler(&hfdcan1);
 ZettlexIncoder incoder(&hspi3);
@@ -71,14 +72,13 @@ ParentController* active_controller = &pdc;
 motor_command_t motor_command = {
 		.position = 0,
 		.velocity = 0.0f,
-		.kp = 0.0f,
-		.kd = 0.0f
 };
 
 motor_reply_t motor_reply = {
 		.position = 0,
 		.velocity = 0.0f,
-		.current = 0.0f
+		.current = 0.0f,
+		.vbus = 0.0f
 };
 
 }
@@ -117,9 +117,9 @@ void setup() {
 
 	as5047pos.setup();
 
-	pdc.setGains(30.0f, 0.3f, 10.0f);
+	pdc.setGains(VEL_KP, VEL_KD, PDC_MAX_CURRENT);
 	pdc.setPositionGains(0.0f);
-	pdc.set_hpf(7.0f);
+	pdc.set_hpf(VEL_HPF);
 	pdc.setTargets(as5047pos.getPhaseCorrMechAngle(), 0.0f);
 	pdc.setTrajectory(0, 0.0f);
 
@@ -216,6 +216,7 @@ void loop() {
 
 //	printf("%d 0x%08x    ", incoder.isValid(), incoder.getAngle());
 	active_controller->exec();
+	HAL_IWDG_Refresh(&hiwdg);
 
 //	uint32_t emf_pos = emfpos.getPhaseCorrElecAngle();
 //	uint32_t enc_pos = as5047pos.getPhaseCorrElecAngle();
@@ -224,24 +225,53 @@ void loop() {
 
 }
 
+volatile uint32_t invalid_count = 0;
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
 	if (htim->Instance == TIM1) {
 //		if (htim->Instance->CR1 & TIM_CR1_DIR) {
 //			emfpos.update();
 //		}
-		if (HAL_GetTick() - motor_command.last_tick > 100) {
-//			pdc.setVelTarget(0.0f);
-//			pdc.reset_PI();
-			pdc.setPositionGains(0.0f);
-			pdc.setTrajectory(incoder.getAngle(), 0.0f);
-		} else {
-//			pdc.setVelTarget(motor_command.velocity);
-			pdc.setPositionGains(2.0f);
-			pdc.setTrajectory(motor_command.position, motor_command.velocity);
+		if (htim->Instance->CR1 & TIM_CR1_DIR) {
+			if (HAL_GetTick() - motor_command.last_tick > 100) {
+				pdc.setPositionGains(0.0f);
+				pdc.setTrajectory(incoder.getAngle(), 0.0f);
+				motor_command.last_tick = HAL_GetTick() - 1000;
+
+			} else {
+				if (!incoder.isValid()) {
+					invalid_count++;
+				} else {
+					invalid_count = 0;
+				}
+				if (invalid_count > 100) {
+					invalid_count = 1000;
+					motor_command.last_tick = HAL_GetTick() - 1000;
+				}
+				pdc.setPositionGains(VEL_POS_GAIN);
+#ifdef ELEVATION
+				pdc.setTrajectory(-motor_command.position, -motor_command.velocity);
+#endif
+
+#ifdef AZIMUTH
+				pdc.setTrajectory(motor_command.position, motor_command.velocity);
+#endif
+			}
+
+#ifdef ELEVATION
+			motor_reply.position = -incoder.getAngle();
+			motor_reply.velocity = -as5047pos.getMechVelocity() / GEAR_REDUCTION;
+			motor_reply.current = -ParentController::getCurrents().q;
+			motor_reply.vbus = ParentController::getVbus();
+#endif
+
+#ifdef AZIMUTH
+			motor_reply.position = incoder.getAngle();
+			motor_reply.velocity = as5047pos.getMechVelocity() / GEAR_REDUCTION;
+			motor_reply.current = ParentController::getCurrents().q;
+			motor_reply.vbus = ParentController::getVbus();
+#endif
 		}
-		motor_reply.position = incoder.getAngle();
-		motor_reply.velocity = as5047pos.getMechVelocity() / GEAR_REDUCTION;
-		motor_reply.current = idqc.getOutput().q;
 		active_controller->update(htim);
 	}
 

@@ -45,8 +45,8 @@ extern "C" {
 /* Exported constants --------------------------------------------------------*/
 /* USER CODE BEGIN EC */
 
-#define AZIMUTH
-//#define ELEVATION
+//#define AZIMUTH
+#define ELEVATION
 
 #ifdef AZIMUTH
 #ifdef MOTOR_DEFINED
@@ -59,8 +59,18 @@ extern "C" {
 #define OFFSET 0x90000000
 #define ID 1
 
-#define GEAR_REDUCTION 488.7f
-#define CAN_ID 0x10
+//#define GEAR_REDUCTION 488.7f
+#define VEL_FUDGE_FACTOR 1.04f
+#define GEAR_REDUCTION 472.0f
+//#define CAN_ID 0x10
+
+#define VEL_KP 30.0f
+#define VEL_HPF 10.0f
+#define VEL_KD 0.3f
+#define VEL_POS_GAIN 2.0f
+
+#define PDC_MAX_CURRENT 10.0f
+
 
 #endif
 
@@ -75,8 +85,19 @@ extern "C" {
 #define OFFSET 0xa2000000
 #define ID 2
 
+#define VEL_FUDGE_FACTOR 1.04f
 #define GEAR_REDUCTION 1078.21f
-#define CAN_ID 0x20
+//#define CAN_ID 0x20
+
+#define VEL_KP 30.0f
+#define VEL_HPF 10.0f
+#define VEL_KD 0.3f
+#define VEL_POS_GAIN 1.0f
+
+#define PDC_MAX_CURRENT 15.0f
+
+#define EL_UPPER_HARDSTOP uint32_t(int32_t(0x1p32f * 2.0f / 360.0f)) // note that elevation is REVERSED!!!
+#define EL_LOWER_HARDSTOP uint32_t(int32_t(0x1p32f * -85.0f / 360.0f))
 
 #endif
 
@@ -89,6 +110,7 @@ extern "C" {
 //#define MAX_MOTOR_VELOCITY 50.0f
 #define VELOCITY_LSB ((3.0f * PI) / (3600.0f * 180.0f)) // 3 arcseconds/s, max speed is about 27 dps, earth rotation is 5 LSB
 #define CURRENT_LSB 0.001f // LSB is 1 mA
+#define VBUS_LSB 0.5f
 
 /* USER CODE END EC */
 

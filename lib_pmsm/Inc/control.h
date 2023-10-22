@@ -168,6 +168,9 @@ public:
 
 	static uint32_t getAngle() {return angle;}
 
+	static vect_dq getCurrents() { return idq; }
+	static float getVbus() { return vbus; }
+
 	virtual void update_downcount() {}
 	virtual void update_upcount() {}
 
@@ -336,9 +339,25 @@ public:
 
 		float vel_err_command = zett_pos_err * pos_kvel;
 		float vel_err_max = 0.7f * sqrtf(2.0f * fabsf(zett_pos_err) * MAX_MOTOR_SLEW / GEAR_REDUCTION) + 0.02f;
+
+
 		vel_err_command = fminf(fmaxf(vel_err_command, -vel_err_max), vel_err_max);
 
-		vel_target = (zett_vel_target + vel_err_command) * GEAR_REDUCTION;
+#ifdef AZIMUTH
+		vel_target = (zett_vel_target + vel_err_command) * GEAR_REDUCTION * VEL_FUDGE_FACTOR;
+#endif
+
+#ifdef ELEVATION
+		float zett_upper_space = fmaxf(float(int32_t(EL_UPPER_HARDSTOP - zett.getAngle())) / ANGLE_CONV, 0.0f);
+		float zett_lower_space = fmaxf(float(int32_t(zett.getAngle() - EL_LOWER_HARDSTOP)) / ANGLE_CONV, 0.0f);
+
+		float vel_tot_max = 0.7f * sqrtf(2.0f * zett_upper_space * MAX_MOTOR_SLEW / GEAR_REDUCTION);
+		float vel_tot_min = -0.7f * sqrtf(2.0f * zett_lower_space * MAX_MOTOR_SLEW / GEAR_REDUCTION);
+
+		vel_target = fminf(fmaxf((zett_vel_target + vel_err_command), vel_tot_min), vel_tot_max) * GEAR_REDUCTION * VEL_FUDGE_FACTOR;
+//		vel_target = (zett_vel_target + vel_err_command) * GEAR_REDUCTION * VEL_FUDGE_FACTOR;
+
+#endif
 
 		vel_target_slew_limited += fminf(fmaxf(vel_target - vel_target_slew_limited, -velocity_slew_limit * dt), velocity_slew_limit * dt);
 		float pos_error = float(int32_t(pos_target - pos.getPhaseCorrMechAngle())) / ANGLE_CONV;

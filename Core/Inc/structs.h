@@ -13,9 +13,6 @@
 struct motor_command_t {
 	uint32_t position;
 	float velocity;
-	float kp;
-	float kd;
-
 	uint32_t last_tick;
 };
 
@@ -23,6 +20,7 @@ struct motor_reply_t {
 	uint32_t position;
 	float velocity;
 	float current;
+	float vbus;
 };
 
 

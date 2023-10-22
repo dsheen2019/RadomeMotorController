@@ -7,6 +7,7 @@
 
 #include <CANHandler.h>
 #include <stdio.h>
+#include <cmath>
 
 void CANHandler::start() {
 	if (HAL_FDCAN_Start(hfdcan) != HAL_OK) {
@@ -75,20 +76,38 @@ void CANHandler::processRxCAN(motor_command_t* _cmd, motor_reply_t* _reply) {
 	uint32_t addr = RxHeader.Identifier;
 
 	if (addr == ID) {
-		if (len == 8) {
-			_cmd->position = *(uint32_t*) (RxData);
-			_cmd->velocity = *(float*) (RxData + 4);
+		if (len == 5) {
+			_cmd->position = (RxData[0] << 24) | (RxData[1] << 16) | (RxData[2] << 8);
+			uint16_t velocity_buf = (RxData[3] << 8) | (RxData[4]);
+			_cmd->velocity = float(int16_t(velocity_buf)) * VELOCITY_LSB;
 			_cmd->last_tick = HAL_GetTick();
 
-//			printf("pos=0x%04x, vel=% 6.2f\n", _cmd->position >> 16, _cmd->velocity);
-
-			setupTxPacket(0x100 + ID, 8);
-			*(uint32_t*) (TxData) = _reply->position;
-			*(float*) (TxData + 4) = _reply->velocity;
-
-			pushTx();
+			createReplyPacket(_reply);
 		}
 	}
+
+	if (addr == 0) {
+		createReplyPacket(_reply);
+	}
+}
+
+void CANHandler::createReplyPacket(motor_reply_t* _reply) {
+	setupTxPacket(0x100 + ID, 8);
+	TxData[0] = _reply->position >> 24;
+	TxData[1] = _reply->position >> 16;
+	TxData[2] = _reply->position >> 8;
+
+	uint16_t velo_limited = int16_t(fminf(fmaxf(lroundf(_reply->velocity / VELOCITY_LSB), -32767.0f), 32767.0f));
+	TxData[3] = velo_limited >> 8;
+	TxData[4] = velo_limited;
+
+	uint16_t current = int16_t(lroundf(_reply->current / CURRENT_LSB));
+	TxData[5] = current >> 8;
+	TxData[6] = current;
+
+	TxData[7] = lroundf(_reply->vbus / VBUS_LSB);
+
+	pushTx();
 }
 
 

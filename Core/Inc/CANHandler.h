@@ -34,6 +34,7 @@ public:
 	void printRxCAN(void);
 
 	void processRxCAN(motor_command_t*, motor_reply_t*);
+	void createReplyPacket(motor_reply_t*);
 };
 
 #endif /* INC_CANHANDLER_H_ */
