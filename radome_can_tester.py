@@ -84,7 +84,7 @@ class RadomeCANHandler:
             self.recvall(0)
     
     # Azimuth 0 is at the horizon, 90 is vertical
-    def getAzEL(self):
+    def getAzEl(self):
         self.moveMessage(0, 0, 0)
         time.sleep(0.05)
         self.recvall(0)
